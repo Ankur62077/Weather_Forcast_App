@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Weather App</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(to bottom, #5ca9e6, #dff2ff);
+            min-height: 100vh;
+            padding: 25px 15px;
+            color: #222;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: auto;
+        }
+
+        .search-box {
+            display: flex;
+            margin-bottom: 20px;
+        }
+
+        #cityInput {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px 0 0 6px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        #searchBtn {
+            padding: 0 18px;
+            border: none;
+            background: #1769aa;
+            color: white;
+            cursor: pointer;
+            border-radius: 0 6px 6px 0;
+        }
+
+        #searchBtn:hover {
+            background: #0d558c;
+        }
+
+        .message {
+            text-align: center;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+        }
+
+        .weather-top {
+            text-align: center;
+            background: rgba(255,255,255,0.9);
+            padding: 25px 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .city {
+            font-size: 18px;
+            color: #555;
+        }
+
+        .temperature {
+            font-size: 65px;
+            font-weight: bold;
+            margin: 8px 0;
+            color: #1769aa;
+        }
+
+        .condition {
+            font-size: 19px;
+            margin-bottom: 5px;
+        }
+
+        .small-text {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .box {
+            background: rgba(255,255,255,0.92);
+            padding: 18px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .box h2 {
+            font-size: 17px;
+            margin-bottom: 12px;
+            color: #1769aa;
+        }
+
+        .hourly {
+            display: flex;
+            overflow-x: auto;
+            gap: 12px;
+            padding-bottom: 5px;
+        }
+
+        .hour {
+            min-width: 65px;
+            text-align: center;
+            padding: 8px 3px;
+        }
+
+        .hour .time {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .hour .icon {
+            font-size: 24px;
+            margin-bottom: 7px;
+        }
+
+        .hour .temp {
+            font-weight: bold;
+        }
+
+        .day {
+            display: grid;
+            grid-template-columns: 65px 35px 1fr 65px;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .day:last-child {
+            border-bottom: none;
+        }
+
+        .day-icon {
+            font-size: 20px;
+        }
+
+        .range {
+            text-align: right;
+            font-size: 13px;
+        }
+
+        .details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .detail {
+            background: rgba(255,255,255,0.92);
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .detail p:first-child {
+            color: #777;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .detail p:last-child {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        @media (max-width: 500px) {
+            .temperature {
+                font-size: 52px;
+            }
+
+            .day {
+                grid-template-columns: 55px 30px 1fr 60px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="search-box">
+        <input type="text" id="cityInput" placeholder="Enter city name">
+        <button id="searchBtn">Search</button>
+    </div>
+
+    <div id="weather">
+        <div class="message">Loading weather...</div>
+    </div>
+
+</div>
+
+<script>
+    // Weather codes used by Open-Meteo
+    const weatherTypes = {
+        0: ["Clear Sky", "☀️"],
+        1: ["Mostly Clear", "🌤️"],
+        2: ["Partly Cloudy", "⛅"],
+        3: ["Cloudy", "☁️"],
+        45: ["Fog", "🌫️"],
+        48: ["Fog", "🌫️"],
+        51: ["Light Drizzle", "🌦️"],
+        53: ["Drizzle", "🌦️"],
+        55: ["Heavy Drizzle", "🌧️"],
+        61: ["Light Rain", "🌦️"],
+        63: ["Rain", "🌧️"],
+        65: ["Heavy Rain", "🌧️"],
+        71: ["Light Snow", "🌨️"],
+        73: ["Snow", "❄️"],
+        75: ["Heavy Snow", "❄️"],
+        80: ["Rain Shower", "🌦️"],
+        81: ["Rain Shower", "🌧️"],
+        82: ["Heavy Shower", "⛈️"],
+        95: ["Thunderstorm", "⛈️"],
+        96: ["Thunderstorm", "⛈️"],
+        99: ["Thunderstorm", "⛈️"]
+    };
+
+    const input = document.getElementById("cityInput");
+    const searchBtn = document.getElementById("searchBtn");
+    const weatherDiv = document.getElementById("weather");
+
+    function getWeatherType(code) {
+        return weatherTypes[code] || ["Unknown", "☁️"];
+    }
+
+    async function findCity(city) {
+        const url =
+            "https://geocoding-api.open-meteo.com/v1/search?name=" +
+            encodeURIComponent(city) +
+            "&count=1&language=en&format=json";
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!data.results || data.results.length === 0) {
+            throw new Error("City not found");
+        }
+
+        return data.results[0];
+    }
+
+    async function getWeather(latitude, longitude) {
+        const url =
+            "https://api.open-meteo.com/v1/forecast?" +
+            "latitude=" + latitude +
+            "&longitude=" + longitude +
+            "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m" +
+            "&hourly=temperature_2m,weather_code" +
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max" +
+            "&timezone=auto&forecast_days=7";
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error("Weather data could not be loaded");
+        }
+
+        return await response.json();
+    }
+
+    function timeFormat(time, timezone) {
+        return new Date(time).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            hour12: true,
+            timeZone: timezone
+        });
+    }
+
+    function dayFormat(date) {
+        return new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+            weekday: "short"
+        });
+    }
+
+    function showWeather(data, city) {
+        const current = data.current;
+        const type = getWeatherType(current.weather_code);
+
+        let hourlyHTML = "";
+        let start = 0;
+
+        for (let i = 0; i < 8; i++) {
+            const code = data.hourly.weather_code[start + i];
+            const hourType = getWeatherType(code);
+
+            hourlyHTML += `
+                <div class="hour">
+                    <div class="time">
+                        ${i === 0 ? "Now" : timeFormat(data.hourly.time[start + i], data.timezone)}
+                    </div>
+                    <div class="icon">${hourType[1]}</div>
+                    <div class="temp">${Math.round(data.hourly.temperature_2m[start + i])}°</div>
+                </div>
+            `;
+        }
+
+        let dailyHTML = "";
+
+        for (let i = 0; i < data.daily.time.length; i++) {
+            const dailyType = getWeatherType(data.daily.weather_code[i]);
+            const dayName = i === 0 ? "Today" : dayFormat(data.daily.time[i]);
+
+            dailyHTML += `
+                <div class="day">
+                    <div>${dayName}</div>
+                    <div class="day-icon">${dailyType[1]}</div>
+                    <div>${dailyType[0]}</div>
+                    <div class="range">
+                        ${Math.round(data.daily.temperature_2m_min[i])}° /
+                        ${Math.round(data.daily.temperature_2m_max[i])}°
+                    </div>
+                </div>
+            `;
+        }
+
+        const uv = Math.round(data.daily.uv_index_max[0]);
+
+        weatherDiv.innerHTML = `
+            <div class="weather-top">
+                <div class="city">
+                    ${city.name}, ${city.country}
+                </div>
+
+                <div class="temperature">
+                    ${Math.round(current.temperature_2m)}°C
+                </div>
+
+                <div class="condition">${type[1]} ${type[0]}</div>
+
+                <div class="small-text">
+                    Feels like ${Math.round(current.apparent_temperature)}°C
+                </div>
+            </div>
+
+            <div class="box">
+                <h2>Hourly Forecast</h2>
+                <div class="hourly">
+                    ${hourlyHTML}
+                </div>
+            </div>
+
+            <div class="box">
+                <h2>7 Day Forecast</h2>
+                ${dailyHTML}
+            </div>
+
+            <div class="details">
+                <div class="detail">
+                    <p>Wind Speed</p>
+                    <p>${Math.round(current.wind_speed_10m)} km/h</p>
+                </div>
+
+                <div class="detail">
+                    <p>Humidity</p>
+                    <p>${current.relative_humidity_2m}%</p>
+                </div>
+
+                <div class="detail">
+                    <p>UV Index</p>
+                    <p>${uv}</p>
+                </div>
+
+                <div class="detail">
+                    <p>Sunrise</p>
+                    <p>${timeFormat(data.daily.sunrise[0], data.timezone)}</p>
+                </div>
+            </div>
+        `;
+    }
+
+    async function loadWeather(cityName) {
+        weatherDiv.innerHTML =
+            '<div class="message">Loading weather...</div>';
+
+        try {
+            const city = await findCity(cityName);
+            const data = await getWeather(city.latitude, city.longitude);
+            showWeather(data, city);
+        } catch (error) {
+            weatherDiv.innerHTML =
+                '<div class="message">City not found. Please try again.</div>';
+        }
+    }
+
+    searchBtn.addEventListener("click", function () {
+        const city = input.value.trim();
+
+        if (city !== "") {
+            loadWeather(city);
+        }
+    });
+
+    input.addEventListener("keypress", function (event) {
+        if (event.key === "Enter") {
+            searchBtn.click();
+        }
+    });
+
+    // Default city
+    loadWeather("Greater Noida");
+</script>
+
+</body>
+</html>
